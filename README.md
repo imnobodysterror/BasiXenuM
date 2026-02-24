@@ -133,7 +133,27 @@ Detected:
 
 443 (nginx HTTPS)
 
+
+Logging / Save Output
+
+During interactive mode you will be asked:
+
+Save [.txt log]? [y/N]
+
+If enabled, a log file is created:
+
+out/<profile>/<target>/<timestamp>/<target>.txt
+
+This file contains:
+
+command output
+
+scan summary
+
+execution logs
+
 Roadmap
+
 
 RustScan compatibility fix
 
