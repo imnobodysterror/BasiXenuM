@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "basixenum"
+version = "0.1.0"
+description = "Baseline enumeration CLI that runs scans and stores results in a clean structure."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Saiko" }]
+keywords = ["pentest", "recon", "nmap", "enumeration"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+]
+
+dependencies = []
+
+[project.scripts]
+basixenum = "basixenum.cli:main"
+
+[tool.setuptools]
+packages = ["basixenum"]
