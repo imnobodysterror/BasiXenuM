@@ -1,43 +1,45 @@
-# BasiXenuM (inbd- enum) — v0.1.6
+BasiXenuM
 
-Fast recon helper for Kali Linux.
+Baseline enumeration helper for fast room/CTF reconnaissance.
 
----
+Usage
+Interactive mode (recommended)
+basixenum
 
-## Usage
+Starts the interactive wizard:
 
-### Interactive mode (recommended)
+asks for Target (IP / FQDN)
 
-Runs prompts for:
+asks for mode (fast / full)
 
-- profile name
-- target
-- mode (fast/full)
-- optional UDP
-- optional save log to txt
+optional txt logging
 
-```bash
+runs enumeration automatically
+
+Direct enum command
 basixenum enum
-Non-interactive flags (if supported in your CLI)
+Non-interactive flags (if supported)
 basixenum enum --mode fast --target 10.10.10.10 --profile thm
 Modes
 FAST
 
-RustScan → port list
+Workflow:
 
-Nmap service + default scripts on discovered ports
+RustScan → discover open ports
 
-Core Nmap style:
+Nmap service detection + default scripts on discovered ports
+
+Nmap defaults:
 
 -sC -sV
 -oA out/<profile>/<target>/<timestamp>/nmap
 FULL
 
-Everything in FAST plus:
+Everything in FAST, plus:
 
 -O --traceroute --reason
 
-If no ports are specified, uses:
+If no ports are specified:
 
 -p-
 
@@ -46,21 +48,17 @@ Optional UDP scan:
 --udp --udp-top-ports <N>
 Output Structure
 
-Everything lands under:
+Results are saved to:
 
 out/<profile>/<target>/<timestamp>/
 
 Typical files:
 
-rustscan.txt (if rustscan ran)
-
+rustscan.txt        # if rustscan ran
 nmap.nmap
-
 nmap.gnmap
-
 nmap.xml
-
-optional: <target>.txt (log)
+<target>.txt        # optional log file
 
 Example:
 
@@ -72,12 +70,15 @@ out/thm/10.81.107.101/2026-02-24_21-53-12/
   10.81.107.101.txt
 Script Output
 
+The tool displays:
+
 Open ports summary (parsed from .nmap)
 
 Last ~40 lines preview (tail output)
 
-Focus Radar signals:
+Focus Radar signals
 
+Focus Radar
 Signal	Ports
 WEB	80, 443, 8080, 8443
 SMB	445
@@ -88,7 +89,7 @@ LDAP	389, 636
 KERBEROS	88
 RPC	111, 135
 NFS	2049
-MAIL	25,110,143,587,993,995
+MAIL	25, 110, 143, 587, 993, 995
 Known Behavior / Gotchas
 1) RustScan --no-nmap issue
 
@@ -100,15 +101,15 @@ Planned fix:
 
 rustscan -a <target> -p <ports> -- echo
 
-If RustScan fails, fallback to Nmap-only scanning.
+If RustScan fails, BasiXenuM falls back to Nmap-only scanning.
 
 2) Logging disables spinner
 
-Spinner is disabled during logging to avoid messy output.
+Spinner output is disabled while logging to avoid messy terminal output.
 
 3) HTTPS-only targets
 
-Observed test case:
+Example observed:
 
 22 → OpenSSH 7.4
 
@@ -116,7 +117,7 @@ Observed test case:
 
 443 → nginx (HTTPS required)
 
-If only 443 exists, test HTTPS first.
+If only port 443 is open, test HTTPS first.
 
 Example Run
 
@@ -124,7 +125,7 @@ Target:
 
 10.81.107.101
 
-Found:
+Detected:
 
 22 (OpenSSH 7.4)
 
