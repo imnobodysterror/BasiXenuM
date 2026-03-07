@@ -11,36 +11,16 @@ import time
 import sys
 from pathlib import Path
 
-VERSION = "0.1.6"
+from basixenum.report import detect_focus_labels, render_triage_report
+from basixenum.vulns import analyze_services
 
-# --- Focus Radar: port -> signal groups ---
-FOCUS_MAP = {
-    "WEB": {"ports": {80, 443, 8080, 8443, 8000, 8888}},
-    "SMB": {"ports": {139, 445}},
-    "WINRM": {"ports": {5985, 5986}},
-    "RDP": {"ports": {3389}},
-    "DNS": {"ports": {53}},
-    "LDAP": {"ports": {389, 636}},
-    "KERBEROS": {"ports": {88}},
-    "RPC": {"ports": {111, 135}},
-    "NFS": {"ports": {2049}},
-    "MAIL": {"ports": {25, 110, 143, 465, 587, 993, 995}},
-}
+VERSION = "0.2.3"
 
-# Nmap normal output line: "80/tcp open http Apache ..."
 NMAP_LINE_RE = re.compile(r"^(\d+)\/(tcp|udp)\s+open\s+(\S+)\s*(.*)$", re.IGNORECASE)
-
-# RustScan output varies by version.
-# Matches any "... 80/tcp ..." regardless of wording.
 RUSTSCAN_PORT_RE = re.compile(r"\b(\d{1,5})/tcp\b", re.IGNORECASE)
-
-# Extract "80/tcp" from the string lines we store like "80/tcp open http ..."
-PORTPROTO_RE = re.compile(r"^(\d{1,5})/(tcp|udp)\b", re.IGNORECASE)
 
 
 class Tee:
-    """Write to multiple streams (stdout + file)."""
-
     def __init__(self, *streams):
         self.streams = streams
 
@@ -63,48 +43,12 @@ def _spinner(label: str, stop_event: threading.Event) -> None:
     print("\r" + " " * (len(label) + 2) + "\r", end="", flush=True)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="basixenum",
-        description="BasiXenuM - baseline enumeration helper",
-    )
-    sub = p.add_subparsers(dest="cmd", required=True)
+def safe_name(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", s.strip())[:80] or "unknown"
 
-    enum_p = sub.add_parser("enum", help="Run baseline enumeration against a target")
-    enum_p.add_argument("target", nargs="?", help="Target IP or hostname (optional: will prompt)")
-    enum_p.add_argument("-p", "--profile", default="default", help="Profile name (folder grouping)")
-    enum_p.add_argument("-o", "--out", default="out", help="Output base directory")
 
-    enum_p.add_argument(
-        "--mode",
-        choices=["fast", "full"],
-        default=None,  # prompt if missing
-        help="fast: baseline. full: all-ports + OS + traceroute + reasons",
-    )
-
-    enum_p.add_argument(
-        "--nmap-args",
-        default="-sS -sC -sV",
-        help="Extra nmap args (default: -sS -sC -sV)",
-    )
-
-    enum_p.add_argument(
-        "--rustscan-ports",
-        default="1-65535",
-        help="RustScan port scope. Use range like 1-65535 or list like 22,80,443 (default: 1-65535)",
-    )
-    enum_p.add_argument(
-        "--rustscan-args",
-        default="",
-        help='Extra rustscan args (example: "-b 2000 --ulimit 5000")',
-    )
-
-    enum_p.add_argument("--udp", action="store_true", help="In full mode, also run a UDP top-ports scan")
-    enum_p.add_argument("--udp-top-ports", default="200", help="UDP top ports to scan in full mode (default: 200)")
-    enum_p.add_argument("--dry-run", action="store_true", help="Print actions, do not execute scans")
-
-    sub.add_parser("version", help="Print version")
-    return p
+def timestamp() -> str:
+    return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def _prompt_target(current: str | None) -> str:
@@ -128,12 +72,49 @@ def _prompt_save_txt() -> bool:
     return raw in ("y", "yes")
 
 
-def safe_name(s: str) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]+", "_", s.strip())[:80] or "unknown"
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="basixenum",
+        description="BasiXenuM - baseline enumeration helper",
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
 
+    enum_p = sub.add_parser("enum", help="Run baseline enumeration against a target")
+    enum_p.add_argument("target", nargs="?", help="Target IP or hostname (optional: will prompt)")
+    enum_p.add_argument("-p", "--profile", default="default", help="Profile name (folder grouping)")
+    enum_p.add_argument("-o", "--out", default="out", help="Output base directory")
 
-def timestamp() -> str:
-    return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    enum_p.add_argument(
+        "--mode",
+        choices=["fast", "full"],
+        default=None,
+        help="fast: baseline. full: all-ports + OS + traceroute + reasons",
+    )
+
+    enum_p.add_argument(
+        "--nmap-args",
+        default="-sS -sC -sV",
+        help="Extra nmap args (default: -sS -sC -sV)",
+    )
+
+    enum_p.add_argument(
+        "--rustscan-ports",
+        default="1-65535",
+        help="RustScan port scope. Use range like 1-65535 or list like 22,80,443 (default: 1-65535)",
+    )
+
+    enum_p.add_argument(
+        "--rustscan-args",
+        default="",
+        help='Extra rustscan args (example: "-b 2000 --ulimit 5000")',
+    )
+
+    enum_p.add_argument("--udp", action="store_true", help="In full mode, also run a UDP top-ports scan")
+    enum_p.add_argument("--udp-top-ports", default="200", help="UDP top ports to scan in full mode (default: 200)")
+    enum_p.add_argument("--dry-run", action="store_true", help="Print actions, do not execute scans")
+
+    sub.add_parser("version", help="Print version")
+    return p
 
 
 def run(cmd: list[str], dry_run: bool, cwd: Path | None = None, show_spinner: bool = True) -> int:
@@ -193,29 +174,34 @@ def run_capture(cmd: list[str], dry_run: bool, cwd: Path | None = None, show_spi
                 t.join(timeout=1)
 
 
-def parse_open_ports_from_nmap(nmap_file: Path) -> list[str]:
+def parse_open_ports_from_nmap(nmap_file: Path) -> list[dict]:
     if not nmap_file.exists():
         return []
-    out: list[str] = []
+
+    results = []
     for line in nmap_file.read_text(errors="ignore").splitlines():
         m = NMAP_LINE_RE.match(line.strip())
-        if m:
-            port, proto, service, rest = m.groups()
-            rest = rest.strip()
-            out.append(f"{port}/{proto} open {service}" + (f" {rest}" if rest else ""))
-    return out
-
-
-def extract_port_ints(port_lines: list[str]) -> list[int]:
-    s = set()
-    for ln in port_lines:
-        m = PORTPROTO_RE.match(ln.strip())
         if not m:
             continue
-        p = int(m.group(1))
-        if 1 <= p <= 65535:
-            s.add(p)
-    return sorted(s)
+
+        port, proto, service, rest = m.groups()
+        rest = rest.strip()
+
+        # Clean Nmap --reason column noise in normal output, e.g.
+        # 21/tcp open ftp syn-ack ttl 62 vsftpd 3.0.5
+        rest = re.sub(r"^(syn-ack|reset|no-response)\s+ttl\s+\d+\s*", "", rest, flags=re.IGNORECASE)
+        rest = re.sub(r"^(syn-ack|reset|no-response)\s*", "", rest, flags=re.IGNORECASE)
+
+        results.append(
+            {
+                "port": int(port),
+                "proto": proto.lower(),
+                "service": service.strip(),
+                "version": rest,
+                "raw": f"{port}/{proto} open {service}" + (f" {rest}" if rest else ""),
+            }
+        )
+    return results
 
 
 def parse_rustscan_ports(output: str) -> list[int]:
@@ -236,11 +222,6 @@ def parse_rustscan_ports(output: str) -> list[int]:
                         ports.add(p)
 
     return sorted(ports)
-
-
-def cmd_version() -> int:
-    print(f"basixenum {VERSION}")
-    return 0
 
 
 def build_nmap_args(mode: str, base_args: str) -> list[str]:
@@ -272,24 +253,9 @@ def build_rustscan_cmd(target: str, scope: str, extra_args: str) -> list[str]:
     return ["rustscan", "-a", target, "--range", scope or "1-65535", "-g", *rs_extra]
 
 
-def print_focus_radar(open_ports_int: list[int]) -> None:
-    detected = []
-    portset = set(open_ports_int)
-
-    for label, meta in FOCUS_MAP.items():
-        if portset & meta["ports"]:
-            detected.append(label)
-
-    ad_needed = {"KERBEROS", "LDAP", "SMB", "DNS"}
-    if ad_needed.issubset(set(detected)):
-        detected.append("ACTIVE_DIRECTORY_LIKELY")
-
-    print("\n=== Focus Radar ===")
-    if detected:
-        for d in detected:
-            print(f"[+] {d}")
-    else:
-        print("[-] No strong signals from common port groups.")
+def cmd_version() -> int:
+    print(f"basixenum {VERSION}")
+    return 0
 
 
 def cmd_enum(args: argparse.Namespace) -> int:
@@ -303,7 +269,6 @@ def cmd_enum(args: argparse.Namespace) -> int:
     print(f"[BasiXenuM] profile={prof} target={args.target} mode={args.mode}")
     print(f"[out] {outdir}")
 
-    # Optional log file: tee stdout to <target>.txt inside outdir
     log_fh = None
     old_stdout = None
     if getattr(args, "save_txt", False) and not args.dry_run:
@@ -313,7 +278,6 @@ def cmd_enum(args: argparse.Namespace) -> int:
         sys.stdout = Tee(sys.stdout, log_fh)
         print(f"[log] saving output to {log_path}")
 
-    # If logging, don't spam the file with spinner frames
     no_spinner = bool(getattr(args, "save_txt", False))
 
     def _cleanup_and_return(code: int) -> int:
@@ -347,7 +311,6 @@ def cmd_enum(args: argparse.Namespace) -> int:
 
     oA = outdir / "nmap"
     nmap_args = build_nmap_args(args.mode, args.nmap_args)
-
     user_specified_ports = ("-p" in nmap_args) or ("-p-" in nmap_args)
 
     if ports_for_nmap:
@@ -364,21 +327,28 @@ def cmd_enum(args: argparse.Namespace) -> int:
         return _cleanup_and_return(rc)
 
     if args.dry_run:
-        print("[dry-run] skipping parsing/preview (no output files created).")
+        print("[dry-run] skipping parsing/report generation (no output files created).")
         return _cleanup_and_return(0)
 
     nmap_txt = Path(str(oA) + ".nmap")
-    ports = parse_open_ports_from_nmap(nmap_txt)
+    port_entries = parse_open_ports_from_nmap(nmap_txt)
+    service_analysis = analyze_services(port_entries)
 
     print("\nOpen ports found:")
-    if ports:
-        for p in ports:
-            print(f"  - {p}")
+    if port_entries:
+        for entry in port_entries:
+            print(f"  - {entry['raw']}")
     else:
         print("  No open ports found.")
 
-    open_ports_int = ports_for_nmap[:] if ports_for_nmap else extract_port_ints(ports)
-    print_focus_radar(open_ports_int)
+    focus_labels = detect_focus_labels(port_entries)
+
+    print("\n=== Focus Radar ===")
+    if focus_labels:
+        for item in focus_labels:
+            print(f"[+] {item}")
+    else:
+        print("[-] No strong signals from common port groups.")
 
     if args.mode == "full" and args.udp:
         udp_oA = outdir / "nmap_udp"
@@ -388,13 +358,30 @@ def cmd_enum(args: argparse.Namespace) -> int:
             print(f"[!] UDP nmap exited with code {rc2}")
         else:
             udp_txt = Path(str(udp_oA) + ".nmap")
-            udp_ports = parse_open_ports_from_nmap(udp_txt)
+            udp_entries = parse_open_ports_from_nmap(udp_txt)
             print("\nUDP open ports found:")
-            if udp_ports:
-                for up in udp_ports:
-                    print(f"  - {up}")
+            if udp_entries:
+                for entry in udp_entries:
+                    print(f"  - {entry['raw']}")
             else:
                 print("  No UDP open ports found (in scanned top ports).")
+
+    report_text = render_triage_report(
+        target=args.target,
+        mode=args.mode,
+        outdir=outdir,
+        port_entries=port_entries,
+        scan_time=dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        service_analysis=service_analysis,
+    )
+
+    report_path = outdir / "triage_report.txt"
+    report_path.write_text(report_text, encoding="utf-8")
+    print(f"\n[report] saved triage report to {report_path}")
+
+    print("\n--- triage report preview ---")
+    print(report_text)
+    print("--- end triage report ---")
 
     if nmap_txt.exists():
         lines = nmap_txt.read_text(errors="ignore").splitlines()
@@ -410,10 +397,6 @@ def cmd_enum(args: argparse.Namespace) -> int:
 def main(argv=None) -> int:
     parser = build_parser()
 
-    # Normalize argv so these work:
-    # - basixenum
-    # - basixenum <target>
-    # - basixenum enum <target> --mode full
     if argv is None:
         argv = sys.argv[1:]
 
