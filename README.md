@@ -1,37 +1,5 @@
 BasiXenuM
 
-<<<<<<< HEAD
-Baseline enumeration helper for fast room/CTF reconnaissance.
-
-Usage
-Interactive mode (recommended)
-basixenum
-
-Starts the interactive wizard:
-
-asks for Target (IP / FQDN)
-
-asks for mode (fast / full)
-
-optional txt logging
-
-runs enumeration automatically
-
-Direct enum command
-basixenum enum
-Non-interactive flags (if supported)
-basixenum enum --mode fast --target 10.10.10.10 --profile thm
-Modes
-FAST
-
-Workflow:
-
-RustScan → discover open ports
-
-Nmap service detection + default scripts on discovered ports
-
-Nmap defaults:
-=======
 Baseline enumeration helper for fast CTF / lab reconnaissance.
 
 BasiXenuM automates the first stage of target analysis by combining:
@@ -40,10 +8,21 @@ RustScan (fast port discovery)
 
 Nmap service detection
 
-automatic triage reporting
+Automated triage reporting
 
 The goal is simple:
-quickly understand the attack surface and identify where to start.
+
+Quickly understand the attack surface and identify where to start.
+
+Designed mainly for:
+
+TryHackMe
+
+HackTheBox
+
+CTF environments
+
+penetration testing training labs
 
 Features
 
@@ -55,23 +34,17 @@ Automatic triage report generation
 
 Focus Radar attack surface detection
 
-Attack Priority suggestion
+Attack Priority suggestions
 
 Likely Initial Attack Path logic
 
-Web surface triage
+Web service triage
 
-Service-level analysis guidance
+Per-service analysis guidance
 
-Designed primarily for:
+The tool attempts to answer the first question in reconnaissance:
 
-TryHackMe
-
-HackTheBox
-
-CTF machines
-
-training labs
+“Where should I start attacking first?”
 
 Installation
 
@@ -89,9 +62,12 @@ Verify installation:
 basixenum version
 Usage
 Interactive Mode (recommended)
+
+Run:
+
 basixenum
 
-Wizard will ask for:
+The wizard will ask for:
 
 Target IP / hostname
 
@@ -99,9 +75,16 @@ Scan mode (fast / full)
 
 Optional logging
 
+Then enumeration begins automatically.
+
 Direct Mode
+
+Run directly against a target:
+
 basixenum enum 10.10.10.10
-Example With Flags
+
+Example with options:
+
 basixenum enum 10.10.10.10 --mode fast --profile thm
 Scan Modes
 FAST (default)
@@ -111,66 +94,36 @@ Workflow:
 RustScan → discover open ports
 Nmap → service detection + default scripts
 
-Nmap flags:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
+Nmap flags used:
 
 -sC -sV
 FULL
 
-<<<<<<< HEAD
-Everything in FAST, plus:
-=======
-Includes everything from FAST plus:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
+Includes everything from FAST, plus:
 
 -O
 --traceroute
 --reason
 
-<<<<<<< HEAD
-If no ports are specified:
-=======
-If ports were not discovered first:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
+If ports were not discovered earlier:
 
 -p-
 
 Optional UDP scan:
 
 --udp
---udp-top-ports <n>
+--udp-top-ports <number>
 Output Structure
 
-<<<<<<< HEAD
-Results are saved to:
-
-out/<profile>/<target>/<timestamp>/
-
-Typical files:
-
-rustscan.txt        # if rustscan ran
-nmap.nmap
-nmap.gnmap
-nmap.xml
-<target>.txt        # optional log file
-
-=======
 Results are stored in:
 
 out/<profile>/<target>/<timestamp>/
 
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 Example:
 
-out/thm/10.81.107.101/20260307_012945/
+out/thm/10.113.137.78/20260307_012945/
 
-<<<<<<< HEAD
-The tool displays:
-
-Open ports summary (parsed from .nmap)
-=======
-Files generated:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
+Typical generated files:
 
 rustscan.txt
 nmap.nmap
@@ -180,9 +133,6 @@ triage_report.txt
 <target>.txt   (optional log)
 Triage Report
 
-<<<<<<< HEAD
-Focus Radar signals
-=======
 BasiXenuM generates a structured triage report including:
 
 Target Information
@@ -199,7 +149,7 @@ High-level explanation of exposed services.
 
 Interesting Findings
 
-Notable signals detected during enumeration.
+Signals detected during enumeration.
 
 Attack Priority
 
@@ -215,7 +165,7 @@ Immediate checks that often reveal vulnerabilities.
 
 Web Triage
 
-Prioritization and analysis of web services.
+Prioritization and analysis of detected web services.
 
 Possible Vulnerability Matches
 
@@ -235,14 +185,12 @@ why the service matters
 
 Recommended Next Steps
 
-Guided enumeration steps.
+Guided enumeration suggestions.
 
 Focus Radar
 
 Focus Radar highlights likely attack surfaces based on detected ports.
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 
-Focus Radar
 Signal	Ports
 WEB	80,443,8080,8443,3128,3333
 SMB	139,445
@@ -253,15 +201,9 @@ LDAP	389,636
 KERBEROS	88
 RPC	111,135
 NFS	2049
-<<<<<<< HEAD
-MAIL	25, 110, 143, 587, 993, 995
-Known Behavior / Gotchas
-1) RustScan --no-nmap issue
-=======
 MAIL	25,110,143,587,993,995
 Known Behavior
 RustScan Compatibility
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 
 Some RustScan versions reject:
 
@@ -271,51 +213,29 @@ Planned workaround:
 
 rustscan -a <target> -p <range> -- echo
 
-<<<<<<< HEAD
-If RustScan fails, BasiXenuM falls back to Nmap-only scanning.
-=======
 If RustScan fails, BasiXenuM automatically falls back to Nmap-only scanning.
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 
 Logging
 
-<<<<<<< HEAD
-Spinner output is disabled while logging to avoid messy terminal output.
-=======
-If logging is enabled:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
+If logging is enabled during interactive mode:
 
 Save [.txt log]? [y/N]
 
-<<<<<<< HEAD
-Example observed:
-=======
-A log file is saved in the scan directory containing:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
+A log file is created in the scan directory containing:
 
 command output
 
 scan progress
 
-terminal results
+execution logs
 
-<<<<<<< HEAD
-If only port 443 is open, test HTTPS first.
-
-Example Run
-=======
 Example Detection
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 
 Target:
 
 10.113.137.78
 
-<<<<<<< HEAD
-Detected:
-=======
 Detected services:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 
 21  FTP (vsftpd)
 22  SSH (OpenSSH)
@@ -326,29 +246,6 @@ Detected services:
 
 Report prioritization:
 
-<<<<<<< HEAD
-
-Logging / Save Output
-
-During interactive mode you will be asked:
-
-Save [.txt log]? [y/N]
-
-If enabled, a log file is created:
-
-out/<profile>/<target>/<timestamp>/<target>.txt
-
-This file contains:
-
-command output
-
-scan summary
-
-execution logs
-
-Roadmap
-
-=======
 1. Web application (3333)
 2. Proxy exposure (3128)
 3. SMB enumeration
@@ -357,7 +254,6 @@ Roadmap
 Roadmap
 
 Planned improvements:
->>>>>>> b95509d (Add triage report intelligence and service analysis)
 
 RustScan compatibility fix
 
