@@ -37,6 +37,40 @@ SUSPICIOUS_PORTS = {
 }
 
 
+def _is_web_entry(entry: dict) -> bool:
+    blob = f"{entry['service']} {entry['version']}".lower()
+    return (
+        entry["port"] in {80, 443, 8080, 8443, 8000, 8888, 3128, 3333}
+        or "http" in entry["service"].lower()
+        or "apache" in blob
+        or "nginx" in blob
+        or "iis" in blob
+        or "squid" in blob
+    )
+
+
+def _is_proxy_entry(entry: dict) -> bool:
+    blob = f"{entry['service']} {entry['version']}".lower()
+    return "proxy" in entry["service"].lower() or "squid" in blob or entry["port"] == 3128
+
+
+def _get_primary_web_entry(port_entries: list[dict]) -> dict | None:
+    web_entries = [e for e in port_entries if _is_web_entry(e)]
+    if not web_entries:
+        return None
+
+    app_candidates = [e for e in web_entries if not _is_proxy_entry(e)]
+    if app_candidates:
+        preferred_ports = [80, 443, 8080, 8443, 8000, 8888, 3333]
+        for port in preferred_ports:
+            for entry in app_candidates:
+                if entry["port"] == port:
+                    return entry
+        return app_candidates[0]
+
+    return web_entries[0]
+
+
 def detect_focus_labels(port_entries: list[dict]) -> list[str]:
     detected = set()
     ports = {e["port"] for e in port_entries}
@@ -239,6 +273,7 @@ def build_recommended_next_steps(port_entries: list[dict], focus_labels: list[st
 
 def build_attack_priority(port_entries: list[dict], service_analysis: list[dict] | None = None) -> list[str]:
     ranked: list[tuple[int, str]] = []
+    primary_web = _get_primary_web_entry(port_entries)
 
     for entry in port_entries:
         port = entry["port"]
@@ -247,7 +282,7 @@ def build_attack_priority(port_entries: list[dict], service_analysis: list[dict]
         version = entry["version"]
         blob = f"{service} {version}".lower()
 
-        if port == 3333 or ("apache" in blob and "http" in service.lower()):
+        if primary_web and entry is primary_web:
             ranked.append((1, f"Port {port}/{proto} ({service}): Primary web application target"))
         elif port == 3128 or "squid" in blob or "proxy" in service.lower():
             ranked.append((2, f"Port {port}/{proto} ({service}): Check proxy abuse / ACL weakness"))
@@ -268,9 +303,10 @@ def build_likely_initial_attack_path(port_entries: list[dict]) -> list[str]:
     steps = []
     ports = {e["port"] for e in port_entries}
     blob = " ".join(f"{e['service']} {e['version']}".lower() for e in port_entries)
+    primary_web = _get_primary_web_entry(port_entries)
 
-    if 3333 in ports or "apache" in blob:
-        steps.append("Enumerate the web application on port 3333")
+    if primary_web:
+        steps.append(f"Enumerate the web application on port {primary_web['port']}")
     if 3128 in ports or "squid" in blob or "proxy" in blob:
         steps.append("Test Squid/proxy exposure for open proxy behavior or ACL abuse")
     if 139 in ports or 445 in ports or "samba" in blob or "netbios" in blob:
@@ -339,41 +375,13 @@ def build_quick_wins(port_entries: list[dict], focus_labels: list[str], service_
 
 
 def build_web_triage(port_entries: list[dict]) -> dict | None:
-    web_entries = []
-    for entry in port_entries:
-        blob = f"{entry['service']} {entry['version']}".lower()
-        if (
-            entry["port"] in {80, 443, 8080, 8443, 8000, 8888, 3128, 3333}
-            or "http" in entry["service"].lower()
-            or "apache" in blob
-            or "nginx" in blob
-            or "iis" in blob
-            or "squid" in blob
-        ):
-            web_entries.append(entry)
+    web_entries = [entry for entry in port_entries if _is_web_entry(entry)]
 
     if not web_entries:
         return None
 
-    primary = None
-    other = []
-
-    proxy_candidates = []
-    app_candidates = []
-
-    for entry in web_entries:
-        blob = f"{entry['service']} {entry['version']}".lower()
-        if "proxy" in entry["service"].lower() or "squid" in blob or entry["port"] == 3128:
-            proxy_candidates.append(entry)
-        else:
-            app_candidates.append(entry)
-
-    if app_candidates:
-        primary = app_candidates[0]
-        other = [e for e in web_entries if e is not primary]
-    else:
-        primary = web_entries[0]
-        other = [e for e in web_entries if e is not primary]
+    primary = _get_primary_web_entry(port_entries)
+    other = [e for e in web_entries if e is not primary]
 
     primary_role = _guess_web_role(primary)
     other_services = [f"{e['port']}/{e['proto']} {e['service']} {e['version']}".strip() for e in other]
