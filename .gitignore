@@ -12,3 +12,9 @@ out/
 *.pyc
 *.egg-info/
 out/
+*.swp
+*.swo
+*.swn
+passlist.txt
+__pycache__/
+*.pyc
